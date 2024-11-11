@@ -1,4 +1,4 @@
-// index.js
+// index.js (최종 수정)
 
 import { extension_settings, getContext } from "../../../extensions.js";
 import { updateMessageBlock, saveSettingsDebounced } from "../../../../script.js"; // script 내장 함수 사용
@@ -82,7 +82,9 @@ default:
 throw new Error("알 수 없는 모델");
 }
 
-console.log(`Sending translation request to ${selectedCompany}, model: ${selectedSubModel}`);// API 호출 시 서브모델 정보도 함께 전달합니다.
+console.log(`Sending translation request to ${selectedCompany}, model: ${selectedSubModel}`);
+
+// API 호출 시 서브모델 정보도 함께 전달합니다.
 const response = await fetch(apiEndpoint ,{
 method: 'POST',
 headers: getRequestHeaders(),
@@ -94,24 +96,76 @@ if (!response.ok) throw new Error(`Failed to translate using model ${selectedCom
 return await response.text();
 }
 
+// 번역 버튼을 메시지에 추가하는 함수
+function addButtonsToMessages() {
+const context = getContext();
+const messages = context.chat || []; // 채팅 메시지 컨텍스트 가져오기
+
+console.log("Attempting to add buttons to messages...");
+
+if (!messages.length) {
+console.log("No messages found.");
+return;
+}
+
+messages.forEach((message, messageId) => {
+
+console.log(`Processing message ${messageId}`);
+
+// 각 메시지에 대해 swipes 데이터 처리 (리롤 데이터 처리)
+if (Array.isArray(message.swipes)) {
+message.swipes.forEach((_, swipeIndex) => {
+
+console.log(`Processing swipe index ${swipeIndex} for message ${messageId}`);
+
+// 이미 버튼이 추가된 경우 중복으로 추가하지 않음
+if (!$(`#chat .mes[mesid="${messageId}"]`).find(`.translate-button[data-swipe-index="${swipeIndex}"]`).length) {
+
+const buttonHtml = `
+<button class="translate-button" data-message-id="${messageId}" data-swipe-index="${swipeIndex}">번역</button>
+<button class="toggle-original-button" data-message-id="${messageId}" data-swipe-index="${swipeIndex}" data-current-state="translated">원문 보기</button>
+`;
+$(`#chat .mes[mesid="${messageId}"] .mes_text`).append(buttonHtml);
+
+// 로그 출력
+console.log(`Added translate and toggle buttons for message ${messageId}, swipe index ${swipeIndex}`);bindButtonEvents(messageId, swipeIndex); // 버튼 이벤트 연결
+}
+});
+} else {
+// 일반적인 메시지 처리
+if (!$(`#chat .mes[mesid="${messageId}"]`).find('.translate-button').length) {
+
+const buttonHtml = `
+<button class="translate-button" data-message-id="${messageId}">번역</button>
+<button class="toggle-original-button" data-message-id="${messageId}" data-current-state="translated">원문 보기</button>
+`;
+$(`#chat .mes[mesid="${messageId}"] .mes_text`).append(buttonHtml);
+
+// 로그 출력
+console.log(`Added translate and toggle buttons for message ${messageId}`);
+
+bindButtonEvents(messageId); // 버튼 이벤트 연결
+}
+}
+
+});
+}
+
 // 페이지 초기화 및 이벤트 리스너 등록하기
 jQuery(async () => {
 
 console.log("LLM Translator script initialized!");
 
 try {
-// SetTimeout으로 약간의 지연 시간 추가 (충돌 방지)
-await new Promise(resolve => setTimeout(resolve, 900));
+await new Promise(resolve => setTimeout(resolve, 900)); // 약간의 지연 시간 추가
 
-// example.html 로드하고 SillyTavern 설정 패널에 삽입
 const htmlContent = await $.get(`${extensionFolderPath}/example.html`);
 
 $("#extensions_settings").append(htmlContent); // 설정 패널에 HTML 추가
-console.log("Appended HTML content to extensions settings.");
 
 addButtonsToMessages(); // 번역 버튼 추가
 
-eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, addButtonsToMessages); // 메시지가 렌더링될 때마다 버튼 처리
+eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, addButtonsToMessages);
 
 } catch (err) {
 console.error("Error occurred during LLM Translator initialization:", err);
