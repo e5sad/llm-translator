@@ -1,87 +1,89 @@
 <div class="llm-translator-settings">
-<div class="inline-drawer">
-<div class="inline-drawer-toggle inline-drawer-header">
-<b>LLM Translator Settings</b>
-<div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
-</div>
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>LLM Translator Settings</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
 
-<div class="inline-drawer-content">
-<!-- Translation Prompt Input -->
-<div class="llm-translator_block flex-container">
-<label for="translation_prompt">Translation Prompt:</label>
-<textarea id="translation_prompt" rows="4" placeholder="Enter translation prompt"></textarea>
-</div>
+        <div class="inline-drawer-content">
+            <!-- Translation Prompt Input -->
+            <div class="llm-translator_block flex-container">
+                <label for="translation_prompt">Translation Prompt:</label>
+                <textarea id="translation_prompt" rows="4" placeholder="Enter translation prompt"></textarea>
+            </div>
 
-<!-- LLM Provider Selection -->
-<div class="llm-translator_block flex-container">
-<label for="model_select">Select Provider:</label>
-<select id="model_select">
-<option value="" disabled selected>Select your provider</option>
-<option value="openai">OpenAI</option>
-<option value="claude">Claude</option>
-<option value="cohere">Cohere</option>
-<option value="google">Google (Gemini)</option>
-</select>
-</div>
+            <!-- LLM Provider Selection -->
+            <div class="llm-translator_block flex-container">
+                <label for="model_select">Select Provider:</label>
+                <select id="model_select">
+                    <option value="" disabled selected>Select your provider</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="claude">Claude</option>
+                    <option value="cohere">Cohere</option>
+                    <option value="google">Google (Gemini)</option>
+                </select>
+            </div>
 
-<!-- Submodel Selection (hardcoded into HTML) -->
-<div class="llm-translator_block flex-container">
-<label for="submodel_select">Select Submodel:</label>
-<select id="submodel_select" disabled>
-<!-- Options will be enabled and displayed dynamically based on provider -->
-<optgroup label="OpenAI">
-<option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
-<option value="gpt-4">gpt-4</option>
-<option value="gpt-4-turbo">gpt-4-turbo</option>
-<!-- Add additional models as needed -->
-</optgroup>
-<optgroup label="Claude">
-<option value="claude-v2">claude-v2</option>
-<option value="claude-v2.1">claude-v2.1</option>
-<!-- Add additional models as needed -->
-</optgroup>
-<!-- More providers and models can be added here -->
-</select>
-</div>
+            <!-- Submodel Selection (hardcoded into HTML) -->
+            <div class="llm-translator_block flex-container">
+                <label for="submodel_select">Select Submodel:</label>
+                <select id="submodel_select" disabled>
+                    <!-- Options will be enabled and displayed dynamically based on provider -->
+                    <optgroup label="OpenAI">
+                        <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                        <option value="gpt-4">gpt-4</option>
+                        <option value="gpt-4-turbo">gpt-4-turbo</option>
+                        <!-- Add additional models as needed -->
+                    </optgroup>
+                    <optgroup label="Claude">
+                        <option value="claude-v2">claude-v2</option>
+                        <option value="claude-v2.1">claude-v2.1</option>
+                        <!-- Add additional models as needed -->
+                    </optgroup>
+                    <!-- More providers and models can be added here -->
+                </select>
+            </div>
 
-<!-- Save and Apply Settings Button -->
-<div class="llm-translator_block flex-container">
-<button id="save_settings_button" class="menu_button">Save and Apply Settings</button>
-</div>
+            <!-- Save and Apply Settings Button -->
+            <div class="llm-translator_block flex-container">
+                <button id="save_settings_button" class="menu_button">Save and Apply Settings</button>
+            </div>
 
-</div>
-</div>
+        </div>
+    </div>
 </div>
 
 <!-- Script to handle settings and dynamic submodel population -->
 <script type="text/javascript">
-$(document).ready(function() {
-// Handle provider change event and enable submodel selection
-$('#model_select').change(function() {
-const selectedProvider = $(this).val();
-$('#submodel_select').prop('disabled', false);
-});
+    $(document).ready(function() {
+        // Handle provider change event and enable submodel selection
+        $('#model_select').change(function() {
+            const selectedProvider = $(this).val();
+            $('#submodel_select').prop('disabled', false);
+        });
 
-// Save settings button
-$('#save_settings_button').click(function() {
-saveSettings(); // Call the function defined in index.js
-});
-});
+        // Save settings button
+        $('#save_settings_button').click(function() {
+            saveSettings(); // Call the function defined in index.js
+        });
+    });
 
-// Save settings function linked to index.js logic
-function saveSettings() {
-const prompt = $('#translation_prompt').val();
-const provider = $('#model_select').val();
-const subModel = $('#submodel_select').val();
+    // Save settings function linked to index.js logic
+    function saveSettings() {
+        const prompt = $('#translation_prompt').val();
+        const provider = $('#model_select').val();
+        const subModel = $('#submodel_select').val();
 
-if (!provider || !subModel) {
-alert('Please select a provider and submodel.');
-return;
-}// 확장자 설정에 저장 (index.js와 연결)
- Extension_Settings.llm_translator.prompt = 프롬프트;
- Extension_Settings.llm_translator.model = 공급자;
- Extension_settings.llm_translator.submodel = 서브 모델;
+        if (!provider || !subModel) {
+            alert('Please select a provider and submodel.');
+            return;
+        }
 
- SaveSettingSdeBounced (); // Sillytavern의 저장 기능
- }
- </스크립트>
+        // Save to extension settings (connected with index.js)
+        extension_settings.llm_translator.prompt = prompt;
+        extension_settings.llm_translator.model = provider;
+        extension_settings.llm_translator.submodel = subModel;
+
+        saveSettingsDebounced(); // SillyTavern's save function
+    }
+</script>
