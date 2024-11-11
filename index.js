@@ -1,16 +1,7 @@
-// index.js
+// index.js (최종 수정)
 
-// public/scripts 내 secret.js 파일과 util.js 파일을 직접 참조하는 대신,
-// 이미 시스템 내부에서 제공하는 모듈들만 사용하고 있습니다.
-
-// 실리태번 전용 함수들 (필요시 import 처리)
 import { extension_settings, getContext } from "../../../extensions.js";
 import { updateMessageBlock, saveSettingsDebounced } from "../../../../script.js"; // script 내장 함수 사용
-
-// secret.js 관련 함수는 이미 fetch 메서드를 통해 비동기적으로 처리 가능함
-import { findSecret } from '../../../../public/scripts/secrets.js'; // secrets.js 로드 (유효한 경로 확인)
-
-// 상대 경로로 util.js 처리를 하지 않음 (필요한 경우 기존 유틸리티 대체)
 
 const extensionName = "llm-translator";
 const translationFolderPath = './data/translations';
@@ -110,7 +101,9 @@ return await response.text();
 // 페이지 초기화 및 이벤트 리스너 등록하기
 jQuery(async () => {
 
-console.log("LLM Translator script initialized!");try {
+console.log("LLM Translator script initialized!");
+
+try {
 // example.html 로드하고 특정 DOM 영역에 추가하기
 const htmlContent = await $.get(`${extensionFolderPath}/example.html`);
 console.log("HTML content loaded successfully.");
@@ -121,9 +114,7 @@ console.log("Appended HTML content to extensions settings.");
 
 addButtonsToMessages(); // 메세지 처리 후 버튼 추가
 
-eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, addButtonsToMessages); // 메시지가 렌더링될 때마다 번역 버튼 추가
-
-} catch (err) {
+eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, addButtonsToMessages); // 메시지가 렌더링될 때마다 번역 버튼 추가} catch (err) {
 console.error("Error occurred during LLM Translator initialization:", err);
 }
 });
