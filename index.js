@@ -1,3 +1,5 @@
+// index.js
+
 import { extension_settings, getContext } from "../../../extensions.js";
 import { updateMessageBlock } from "../../../../script.js";
 import { writeFileSync, readFileSync } from "../../../../util.js"; // util.js 사용
@@ -122,13 +124,13 @@ function toggleOriginalOrSwipeTranslation(messageId, swipeIndex) {
 const context = getContext();
 const room_id = context.room_id || 'default';
 
-let toggleButtonSelector = `.toggle-original-button[data-message-id="${messageId}"][data-swipe-index="${swipeIndex}"]`;let currentState = $(toggleButtonSelector).data('current-state');
+let toggleButtonSelector = `.toggle-original-button[data-message-id="${messageId}"][data-swipe-index="${swipeIndex}"]`;
+
+let currentState = $(toggleButtonSelector).data('current-state');
 
 let selectedSwipe = context.chat[messageId].swipes[swipeIndex];
 
-if (currentState === 'translated') {
-
-$(toggleButtonSelector).text('번역 보기');
+if (currentState === 'translated') {$(toggleButtonSelector).text('번역 보기');
 $(toggleButtonSelector).data('current-state', 'original');
 $(`#chat .mes[mesid="${messageId}"] .mes_text`).text(selectedSwipe.mes);
 
@@ -217,6 +219,8 @@ default:
 throw new Error("알 수 없는 모델");
 }
 
+console.log(`Sending translation request to ${selectedCompany}, model: ${selectedSubModel}`);
+
 // API 호출 시 서브모델 정보도 함께 전달합니다.
 const response = await fetch(apiEndpoint ,{
 method: 'POST',
@@ -235,8 +239,22 @@ return await response.text();
 // 페이지 초기화 및 이벤트 리스너 등록하기
 jQuery(async () => {
 
-addButtonsToMessages();
+console.log("LLM Translator script initialized!");
 
-eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, addButtonsToMessages);
+try {
+// example.html 로드하고 특정 DOM 영역에 추가하기
+const htmlContent = await $.get(`${extensionFolderPath}/example.html`);
+console.log("HTML content loaded successfully.");
 
+// 설정 패널 부분에 HTML 삽입 (SillyTavern의 설정 창에 넣음)
+$("#extensions_settings").append(htmlContent);
+console.log("Appended HTML content to extensions settings.");
+
+addButtonsToMessages(); // 메세지 처리 후 버튼 추가
+
+eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, addButtonsToMessages); // 메시지가 렌더링될 때마다 번역 버튼 추가
+
+} catch (err) {
+console.error("Error occurred during LLM Translator initialization:", err);
+}
 });
