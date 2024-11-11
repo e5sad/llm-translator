@@ -1,44 +1,87 @@
 <div class="llm-translator-settings">
 <div class="inline-drawer">
 <div class="inline-drawer-toggle inline-drawer-header">
-<b>LLM Translator 설정</b>
+<b>LLM Translator Settings</b>
 <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
 </div>
 
-<!-- 설정 펼침 -->
 <div class="inline-drawer-content">
-
-<!-- 번역 프롬프트 입력란 -->
+<!-- Translation Prompt Input -->
 <div class="llm-translator_block flex-container">
-<label for="translation_prompt">번역 프롬프트:</label>
-<textarea id="translation_prompt" rows="3" placeholder="번역할 때 사용할 지시문 (프롬프트)을 입력하세요"></textarea>
+<label for="translation_prompt">Translation Prompt:</label>
+<textarea id="translation_prompt" rows="4" placeholder="Enter translation prompt"></textarea>
 </div>
 
-<!-- LLM 회사 선택 -->
+<!-- LLM Provider Selection -->
 <div class="llm-translator_block flex-container">
-<label for="model_select">회사 선택:</label>
+<label for="model_select">Select Provider:</label>
 <select id="model_select">
-<option value="">회사를 선택하세요</option>
+<option value="" disabled selected>Select your provider</option>
 <option value="openai">OpenAI</option>
 <option value="claude">Claude</option>
 <option value="cohere">Cohere</option>
-<option value="google">Google Gemini</option>
+<option value="google">Google (Gemini)</option>
 </select>
 </div>
 
-<!-- 서브모델 선택 (선택한 회사에 따라 변경됨) -->
+<!-- Submodel Selection (hardcoded into HTML) -->
 <div class="llm-translator_block flex-container">
-<label for="submodel_select">세부 모델 선택:</label>
+<label for="submodel_select">Select Submodel:</label>
 <select id="submodel_select" disabled>
-<!-- 회사 선택 후 여기에 서브 모델이 동적으로 추가될 예정 -->
-<option value="">회사 먼저 선택</option>
+<!-- Options will be enabled and displayed dynamically based on provider -->
+<optgroup label="OpenAI">
+<option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+<option value="gpt-4">gpt-4</option>
+<option value="gpt-4-turbo">gpt-4-turbo</option>
+<!-- Add additional models as needed -->
+</optgroup>
+<optgroup label="Claude">
+<option value="claude-v2">claude-v2</option>
+<option value="claude-v2.1">claude-v2.1</option>
+<!-- Add additional models as needed -->
+</optgroup>
+<!-- More providers and models can be added here -->
 </select>
 </div>
 
-<!-- 저장된 번역문 리로드 버튼 -->
-<button id="reload_translation_button" class="menu_button">저장된 번역 리로드</button>
+<!-- Save and Apply Settings Button -->
+<div class="llm-translator_block flex-container">
+<button id="save_settings_button" class="menu_button">Save and Apply Settings</button>
+</div>
 
-</div> <!-- /.inline-drawer-content -->
+</div>
+</div>
+</div>
 
-</div> <!-- /.inline-drawer -->
-</div> <!-- /.llm-translator-settings -->
+<!-- Script to handle settings and dynamic submodel population -->
+<script type="text/javascript">
+$(document).ready(function() {
+// Handle provider change event and enable submodel selection
+$('#model_select').change(function() {
+const selectedProvider = $(this).val();
+$('#submodel_select').prop('disabled', false);
+});
+
+// Save settings button
+$('#save_settings_button').click(function() {
+saveSettings(); // Call the function defined in index.js
+});
+});
+
+// Save settings function linked to index.js logic
+function saveSettings() {
+const prompt = $('#translation_prompt').val();
+const provider = $('#model_select').val();
+const subModel = $('#submodel_select').val();
+
+if (!provider || !subModel) {
+alert('Please select a provider and submodel.');
+return;
+}// 확장자 설정에 저장 (index.js와 연결)
+ Extension_Settings.llm_translator.prompt = 프롬프트;
+ Extension_Settings.llm_translator.model = 공급자;
+ Extension_settings.llm_translator.submodel = 서브 모델;
+
+ SaveSettingSdeBounced (); // Sillytavern의 저장 기능
+ }
+ </스크립트>
