@@ -1,9 +1,11 @@
-// index.js (최종 수정)
+// index.js
 
 import { extension_settings, getContext } from "../../../extensions.js";
 import { updateMessageBlock, saveSettingsDebounced } from "../../../../script.js"; // script 내장 함수 사용
 
+// 기본 설정값 및 경로 지정
 const extensionName = "llm-translator";
+const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
 const translationFolderPath = './data/translations';
 
 // 각 회사에 대한 세부 모델 리스트 정의
@@ -14,7 +16,7 @@ cohere: ['command-xlarge', 'command-medium'],
 google: ['gemini', 'lamda']
 };
 
-// 번역본 저장 및 불러오기 함수들 정의
+// 번역본 저장 및 불러오기 함수들 정의 (localStorage로 처리)
 function getTranslationFilePath(roomId) {
 return `${translationFolderPath}/chat_${roomId}_translations.txt`;
 }
@@ -40,7 +42,6 @@ console.error("번역 데이터 없음:", err.message);
 return null;
 }
 
-// 번역본을 localStorage에 저장하는 함수
 function saveSwipeTranslationToFile(roomId, messageId, swipeIndex, translatedText) {
 const filePath = getTranslationFilePath(roomId);
 
@@ -56,7 +57,7 @@ console.error("번역 데이터 쓰기 실패:", err.message);
 }
 }
 
-// API 요청 시 사용하는 메인 함수 (회사 및 모델을 기반으로)
+// API 요청 시 사용하는 메인 함수 (회사 및 모델 기반)
 async function requestTranslationFromAPI(text) {
 
 let apiEndpoint;
@@ -81,16 +82,11 @@ default:
 throw new Error("알 수 없는 모델");
 }
 
-console.log(`Sending translation request to ${selectedCompany}, model: ${selectedSubModel}`);
-
-// API 호출 시 서브모델 정보도 함께 전달합니다.
+console.log(`Sending translation request to ${selectedCompany}, model: ${selectedSubModel}`);// API 호출 시 서브모델 정보도 함께 전달합니다.
 const response = await fetch(apiEndpoint ,{
 method: 'POST',
 headers: getRequestHeaders(),
-body: JSON.stringify({
-text,
-model: selectedSubModel // 여기서 선택된 서브모델 전송
-})
+body: JSON.stringify({ text, model: selectedSubModel }) // 선택된 서브모델 전송
 });
 
 if (!response.ok) throw new Error(`Failed to translate using model ${selectedCompany}`);
@@ -104,17 +100,20 @@ jQuery(async () => {
 console.log("LLM Translator script initialized!");
 
 try {
-// example.html 로드하고 특정 DOM 영역에 추가하기
-const htmlContent = await $.get(`${extensionFolderPath}/example.html`);
-console.log("HTML content loaded successfully.");
+// SetTimeout으로 약간의 지연 시간 추가 (충돌 방지)
+await new Promise(resolve => setTimeout(resolve, 900));
 
-// 설정 패널 부분에 HTML 삽입 (SillyTavern의 설정 창에 넣음)
-$("#extensions_settings").append(htmlContent);
+// example.html 로드하고 SillyTavern 설정 패널에 삽입
+const htmlContent = await $.get(`${extensionFolderPath}/example.html`);
+
+$("#extensions_settings").append(htmlContent); // 설정 패널에 HTML 추가
 console.log("Appended HTML content to extensions settings.");
 
-addButtonsToMessages(); // 메세지 처리 후 버튼 추가
+addButtonsToMessages(); // 번역 버튼 추가
 
-eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, addButtonsToMessages); // 메시지가 렌더링될 때마다 번역 버튼 추가} catch (err) {
+eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, addButtonsToMessages); // 메시지가 렌더링될 때마다 버튼 처리
+
+} catch (err) {
 console.error("Error occurred during LLM Translator initialization:", err);
 }
 });
