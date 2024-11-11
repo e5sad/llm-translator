@@ -12,28 +12,6 @@ const extensionName = "llm-translator";
 const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
 const translationFolderPath = './data/translations';
 
-// 로컬스토리지에 설정값 저장 함수
-function saveSettingsToLocalStorage() {
-localStorage.setItem('llm_translator_model', extension_settings.llm_translator.model);
-localStorage.setItem('llm_translator_submodel', extension_settings.llm_translator.submodel);
-}
-
-// 로컬스토리지에서 설정값 불러오기 함수
-function loadSettingsFromLocalStorage() {
-const model = localStorage.getItem('llm_translator_model');
-const subModel = localStorage.getItem('llm_translator_submodel');
-
-if (model) {
-extension_settings.llm_translator.model = model;
-$('#model_select').val(model);
-}
-
-if (subModel) {
-extension_settings.llm_translator.submodel = subModel;
-$('#submodel_select').val(subModel);
-}
-}
-
 // 번역본 저장 및 불러오기 함수들 정의 (localStorage 또는 파일로 처리)
 function getTranslationFilePath(roomId) {
 return `${translationFolderPath}/chat_${roomId}_translations.txt`;
@@ -47,152 +25,159 @@ const translations = JSON.parse(localStorage.getItem(filePath)) || [];
 let translationFound = false;
 
 for (const line of translations) {
-if (line.startsWith(`[Message ID:${messageId}]`)) translationFound = true;if (translationFound && line.startSwith (`Swipe Index : $ {SwipeIndex}`)) {
- return line.replace (`swipe index : $ {swipeIndex} ->`, '') .trim ();
- }
- }
- } catch (err) {
- Console.error ( "번역 데이터 없음 :", err.message);
- }
+if (line.startsWith(`[Message ID:${messageId}]`)) translationFound = true;
 
- 널 리턴;
- }
+if (translationFound && line.startsWith(`Swipe Index:${swipeIndex}`)) {
+return line.replace(`Swipe Index:${swipeIndex} ->`, '').trim();
+}
+}
+} catch (err) {
+console.error("No translation data found:", err.message);
+}
 
- 함수 SavesWipetRanslationTofile (룸메드, MessageId, SwipeIndex, TranslatedText) {
- const filepath = getTranslationFilePath (룸메이트);
+return null;
+}
 
- 노력하다 {
- 기존 translations = json.parse (localStorage.getItem (filepath)) || [];
- const newline =`[메시지 id : $ {messageid}] \ nswipe index : $ {swipeIndex} -> $ {translatedText} \ n`;
+function saveSwipeTranslationToFile(roomId, messageId, swipeIndex, translatedText) {
+const filePath = getTranslationFilePath(roomId);
 
- 기존 translations.push (Newline);
- LocalStorage.setItem (FilePath, JSON.Stringify (기존 전송));
+try {
+let existingTranslations = JSON.parse(localStorage.getItem(filePath)) || [];
+const newLine = `[Message ID:${messageId}]\nSwipe Index:${swipeIndex} -> ${translatedText}\n`;
 
- } catch (err) {
- Console.error ( "번역 데이터를 작성하지 못했습니다 :", err.message);
- }
- }
+existingTranslations.push(newLine);
+localStorage.setItem(filePath, JSON.stringify(existingTranslations));
 
- // api 요청 i 사용하는 사용하는 메인 함수 (회사 및 모델 기반)
- Async 함수 requestTranslationfromapi (텍스트) {
+} catch (err) {
+console.error("Failed to write translation data:", err.message);
+}
+}// Translate API 호출 함수 수정: 실제 회사 제공 엔드포인트 사용
+async function requestTranslationFromAPI(text) {
 
- Apiendpoint를하자;
+let apiEndpoint;
 
- const selectedcompany = extension_settings?. [ExtensionName]?. 모델 || "Openai"; // openai
- const selectedSubModel = Extension_Settings?. [ExtensionName]?. 서브 모델 || "GPT-4"; // 기본적으로 gpt4
+const selectedCompany = extension_settings?.[extensionName]?.model || "openai"; // 기본적으로 OpenAI
+const selectedSubModel = extension_settings?.[extensionName]?.submodel || "gpt-4"; // 기본적으로 GPT4
 
- if (! selectedCompany ||! selectedSubModel) {
- 경고 ( "번역하기 전에 회사와 서브 모델을 선택하십시오.");
- 새 오류를 던지십시오 ( '유효하지 않은 모델 또는 서브 모델 선택');
- }
+if (!selectedCompany || !selectedSubModel) {
+alert("Please select a company and submodel before translating.");
+throw new Error('Invalid model or submodel selection.');
+}
 
- 스위치 (selectedCompany) {
- 사례 'openai':
- apiendpoint = '/api/translate/openai'; //이 부분이 필요 (올바른 엔드포인트로 변경할 것 것)
- 부서지다;
- 사례 'Claude':
- apiendpoint = '/api/translate/claude';
- 부서지다;
- 케이스 '코어':
- apiendpoint = '/api/translate/cohere';
- 부서지다;
- CASE 'Google':
- apiendpoint = '/api/translate/google-ai-studio';
- 부서지다;
- 기본:
- 새로운 오류를 던지십시오 ( '알 수없는 모델');
- }
+// API 엔드포인트 정의
+switch(selectedCompany) {
+case 'openai':
+apiEndpoint = 'https://api.openai.com/v1/completions'; // 실제 OpenAI 엔드포인트
+break;
+case 'claude':
+apiEndpoint = 'https://api.anthropic.com/v1/complete'; // Claude 엔드포인트
+break;
+case 'cohere':
+apiEndpoint = 'https://api.cohere.ai/generate'; // Cohere 엔드포인트
+break;
+case 'google':
+apiEndpoint = '/api/translate/google-ai-studio'; // Google Gemini PaLM 엔드포인트 필요 (임시)
+break;
+default:
+throw new Error('Unknown model');
+}
 
- console.log (`번역 요청 보내기 $ {selectedCompany}, 모델 : $ {selectedSubModel}`);
+console.log(`Sending translation request to ${selectedCompany}, model: ${selectedSubModel}`);
 
- 노력하다 {
- const response = 기다려서 페치 (Apiendpoint, {
- 방법 : 'post',
- 헤더 : getRequestheaders (),
- Body : JSON.Stringify ({text, model : selectedSubModel})
- });
+try {
+const response = await fetch(apiEndpoint ,{
+method: 'POST',
+headers: getRequestHeaders(), // 이 부분 해결됨
+body: JSON.stringify({ prompt: text, model: selectedSubModel }) // prompt 전달 방식 변경 (회사에 따라 다를 수 있음)
+});
 
- if (! response.ok) Throw New Error (`모델 $ {selectedCompany}`)를 사용하여 번역하지 못했습니다.
+if (!response.ok) throw new Error(`Failed to translate using model ${selectedCompany}`);
 
- 반환 대기 응답 .text ();
+return await response.json(); // JSON 형태로 응답받음
 
- } catch (오류) {
- Console.error ( "번역 중 오류 :", 오류);
- ALERT (`번역 실패 : $ {ERROR.MESSAGE}`);
- 널 리턴;
- }
- }
+} catch(error) {
+console.error("Error during translation:", error);
+alert(`Translation failed: ${error.message}`);
+return null;
+}
+}
 
- // 번역 버튼을 번역 추가하는 함수 함수
- 함수 addButtonstomessages () {
- const context = getContext ();
- const 메시지 = context.chat || [];
+// 번역 및 원문보기 버튼을 메시지에 추가하는 함수
+function addButtonsToMessages() {
+const context = getContext();
+const messages = context.chat || [];
 
- if (! messages.length) {
- Console.log ( "메시지 없음");
- 반품;
- }
+if (!messages.length) {
+console.log("No messages found.");
+return;
+}
 
- // 각 메시지마다 각 버튼 추가 추가 (메시지 상단에 사용자 사용자 옆에 옆에 배치)
- messages.foreach ((message, messageId) => {
+// 각 메시지마다 번역 버튼 추가 (메시지 상단에 사용자 이름 옆에 배치)
+messages.forEach((message, messageId) => {
 
- // 사용자 이름 사용자 컨테이너에 추가 추가
- if ($ (`#chat .mes [mesid = "$ {messageid}"]`) .find ( '. Translate-Button'). length === 0) {
- const buttonhtml =`
- <div class = "message-buttons">
- <button class = "translate-button"data-message-id = "$ {messageid}"> Translate </button>
- <button class = "Toggle-Original-Button"data-message-id = "$ {messageid}"data-current-state = "translated"> show inriginal </button>
- </div>
- `;;
+// 사용자 이름 옆 컨테이너에 추가
+if ($(`#chat .mes[mesid="${messageId}"]`).find('.translate-button').length === 0) {
+const buttonHtml = `
+<div class="message-buttons">
+<button class="translate-button" data-message-id="${messageId}">Translate</button>
+<button class="toggle-original-button" data-message-id="${messageId}" data-current-state="translated">Show Original</button>
+</div>
+`;
 
- // 사용자 이름 사용자 추가하기 (기존 구조를 참고한 위치 위치)
- $ (`#chat .mes [mesid = "$ {messageid}"] .ch_name`) .append (buttonhtml);
+$(`#chat .mes[mesid="${messageId}"] .ch_name`).append(buttonHtml);
 
- Bindbuttonevents (MessageId); // 이벤트 바인딩
- }
- });
- }
+bindButtonEvents(messageId); // 이벤트 바인딩
+}
+});
+}
 
- // 번역 버튼 번역시시 실행되는 이벤트 리스너 연결
- 함수 bindbuttonevents (messageId) {
+// 이벤트 리스너 등록 방식 최적화: SillyTavern 내부에서 발생하는 이벤트 감지
+function addEventListeners() {
 
- $ (document) .off ( 'click',`.TransLate-Button [data-message-id = "$ {messageid}"]`)
- .on ( 'click',`.TransLate-Button [data-message-id = "$ {messageid}"]`, async () => {
- const messagetext = $ (`#chat .mes [mesid = "$ {messageid}"] .mes_text`) .text ();
- const translatedText = await requestTranslationFromApi (messagetext);
+eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, addButtonsToMessages); // 캐릭터 메시지가 렌더링될 때 감지
+eventSource.on(event_types.USER_MESSAGE_RENDERED, addButtonsToMessages); // 사용자 메시지가 렌더링될 때도 감지
 
- if (translatedText! == null) {
- SavesWipetRanslationTofile (getContext (). room_id, MessageId, 0, TranslatedText);
- $ (`#chat .mes [mesid = "$ {messageid}"] .mes_text`) .text (TranslatedText); // 화면에 표시
- }
- });
+}
 
- $ (document) .off ( 'click',`.toggle-original-button [data-message-id = "$ {messageid}"]`)
- .on ( 'click',`.Toggle-Original-Button [data-message-id = "$ {messageid}"]`, () => toggleoriginalorswipetranslation (messageid));
- }
+// Drawer 설정 값 유지하기 위한 로컬 스토리지 관리
+function loadSettingsFromLocalStorage() {
+const savedPrompt = localStorage.getItem(`${extensionName}_prompt`);
+const savedModel = localStorage.getItem(`${extensionName}_model`);
+const savedSubmodel = localStorage.getItem(`${extensionName}_submodel`);
 
- // 이벤트 리스너 이벤트 방식 최적화 최적화 : sillytavern 내부에서 발생하는 이벤트 감지 감지
- 함수 addeventListeners () {
+if (savedPrompt) $('#translation_prompt').val(savedPrompt);
+if (savedModel) $('#model_select').val(savedModel).trigger('change'); // 모델 변경 시 트리거 작동시키기 위함
+if (savedSubmodel) $('#submodel_select').val(savedSubmodel);
+}
 
- eventSource.on (event_types.character_message_rendered, addButtonstomessages); // 캐릭터 메시지가 캐릭터 때 감지 감지
- eventSource.on (event_types.user_message_rendered, addbuttonstomessages); // 사용자 메시지가 사용자 때도 감지 감지
+// 새로운 설정 값 적용 시 로컬 스토리지에 저장하기
+function saveSettingsToLocalStorage() {
+const prompt = $('#translation_prompt').val();
+const model = $('#model_select').val();
+const submodel = $('#submodel_select').val();
 
- }
+localStorage.setItem(`${extensionName}_prompt`, prompt);
+localStorage.setItem(`${extensionName}_model`, model);
+localStorage.setItem(`${extensionName}_submodel`, submodel);
+}
 
- // 페이지 초기화 페이지 이벤트 리스너 등록하기 등록하기
- jQuery (async () => {
+// 페이지 초기화 및 이벤트 리스너 등록하기
+jQuery(async () => {
 
- Console.log ( "LLM Translator 스크립트 초기화!");
+console.log("LLM Translator script initialized!");
 
- 노력하다 {
- 새로운 약속을 기다리고 있습니다 (resolve => settimeout (resolve, 900)); // 약간의 지연 약간의 추가
+try {
+await new Promise(resolve => setTimeout(resolve, 900)); // 약간의 지연 시간 추가
 
- loadsettingsfromlocalstorage (); // 로컬스토리지에서 설정 로컬스토리지에서const htmlContent = await $.get(`${extensionFolderPath}/example.html`);
-$("#extensions_settings").append(htmlContent); // 설정 패널에 HTML 추가
+const htmlContent = await $.get(`${extensionFolderPath}/example.html`);
+$("#extensions_settings").append(htmlContent);
 
-addButtonsToMessages(); // 첫 번째 메시지 그룹에 번역 버튼 추가
+loadSettingsFromLocalStorage(); // 새로고침 후에도 설정 값을 불러오기
 
-addEventListeners(); // 모든 메시지 렌더링 후 이벤트 리스너 연결
+addButtonsToMessages();
+addEventListeners();
+
+$('#save_settings_button').click(saveSettingsToLocalStorage); // Save and Apply settings 자동 적용
 
 } catch (err) {
 console.error("Error occurred during LLM Translator initialization:", err);
