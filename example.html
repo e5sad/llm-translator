@@ -1,0 +1,48 @@
+<!-- example.html -->
+
+<div class="llm-translator-settings">
+<div class="inline-drawer">
+<div class="inline-drawer-toggle inline-drawer-header">
+<b>LLM Translator Settings</b>
+<div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+</div>
+<div class="inline-drawer-content">
+
+<!-- 번역 모델 회사 선택 -->
+<div class="llm-translator_block flex-container">
+<label for="model_select">Choose a company:</label>
+<select id="model_select" name="model_select">
+<option value="openai">OpenAI</option>
+<option value="claude">Claude</option>
+<option value="cohere">Cohere</option>
+<option value="google">Google AI Studio</option>
+</select>
+</div>
+
+<!-- 세부 번역 모델 (예: GPT4, Claude-v1 등) 선택 -->
+<div class="llm-translator_block flex-container">
+<label for="submodel_select">Choose a model:</label>
+<select id="submodel_select" name="submodel_select">
+<!-- 기본값은 OpenAI의 GPT가 있을테니 이를 기본값으로 설정 -->
+<option value="gpt4">GPT-4</option>
+<option value="gpt3.5">GPT-3.5</option>
+</select>
+</div>
+
+<!-- 자동 번역 활성화 체크박스 -->
+<div class="llm-translator_block flex-container">
+<input id="auto_translate" type="checkbox" />
+<label for="auto_translate">Enable automatic translation</label>
+</div>
+
+<!-- 버튼 클릭 시 즉시 번역 -->
+<div class="llm-translator_block flex-container">
+<input id="translate_button" class="menu_button" type="submit" value="Translate Now" />
+</div>
+
+<!-- 구분선 추가 -->
+<hr class="sysHR" />
+
+</div>
+</div>
+</div>
