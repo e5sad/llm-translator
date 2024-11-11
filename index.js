@@ -1,13 +1,18 @@
 // index.js
 
-import { extension_settings, getContext } from "../../../extensions.js";
-import { updateMessageBlock, saveSettingsDebounced } from "../../../../script.js"; // script 내장 함수 사용
-import { event_types } from "../../../../script.js"; // SillyTavern 내부 이벤트
+import {
+extension_settings,
+getContext,
+} from "../../../extensions.js";
+import { updateMessageBlock, saveSettingsDebounced, getRequestHeaders } from "../../../../script.js"; // getRequestHeaders 추가됨
+import { eventSource, event_types } from "../../../../script.js"; // event_types 가져오기
 
+// 기본 설정값 및 경로 지정
 const extensionName = "llm-translator";
 const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
 const translationFolderPath = './data/translations';
 
+// 번역본 저장 및 불러오기 함수들 정의 (localStorage 또는 파일로 처리)
 function getTranslationFilePath(roomId) {
 return `${translationFolderPath}/chat_${roomId}_translations.txt`;
 }
@@ -41,7 +46,9 @@ let existingTranslations = JSON.parse(localStorage.getItem(filePath)) || [];
 const newLine = `[Message ID:${messageId}]\nSwipe Index:${swipeIndex} -> ${translatedText}\n`;
 
 existingTranslations.push(newLine);
-localStorage.setItem(filePath, JSON.stringify(existingTranslations));} catch (err) {
+localStorage.setItem(filePath, JSON.stringify(existingTranslations));
+
+} catch (err) {
 console.error("Failed to write translation data:", err.message);
 }
 }
@@ -51,9 +58,8 @@ async function requestTranslationFromAPI(text) {
 
 let apiEndpoint;
 
-// 선택된 회사 및 서브모델 체크
-const selectedCompany = extension_settings?.[extensionName]?.model || "openai"; // 기본값 OpenAI
-const selectedSubModel = extension_settings?.[extensionName]?.submodel || "gpt-4"; // 기본값 GPT4
+const selectedCompany = extension_settings?.[extensionName]?.model || "openai"; // 기본적으로 OpenAI
+const selectedSubModel = extension_settings?.[extensionName]?.submodel || "gpt-4"; // 기본적으로 GPT4
 
 if (!selectedCompany || !selectedSubModel) {
 alert("Please select a company and submodel before translating.");
@@ -82,7 +88,7 @@ console.log(`Sending translation request to ${selectedCompany}, model: ${selecte
 try {
 const response = await fetch(apiEndpoint ,{
 method: 'POST',
-headers: getRequestHeaders(),
+headers: getRequestHeaders(), // 이 부분 해결됨
 body: JSON.stringify({ text, model: selectedSubModel })
 });
 
@@ -113,11 +119,11 @@ messages.forEach((message, messageId) => {
 // 사용자 이름 옆 컨테이너에 추가
 if ($(`#chat .mes[mesid="${messageId}"]`).find('.translate-button').length === 0) {
 const buttonHtml = `
+<div class="message-buttons">
 <button class="translate-button" data-message-id="${messageId}">Translate</button>
 <button class="toggle-original-button" data-message-id="${messageId}" data-current-state="translated">Show Original</button>
-`;
-
-// 사용자 이름 옆에 추가하기 (기존 구조를 참고한 위치)
+</div>
+`;// 사용자 이름 옆에 추가하기 (기존 구조를 참고한 위치)
 $(`#chat .mes[mesid="${messageId}"] .ch_name`).append(buttonHtml);
 
 bindButtonEvents(messageId); // 이벤트 바인딩
@@ -125,7 +131,7 @@ bindButtonEvents(messageId); // 이벤트 바인딩
 });
 }
 
-// 번역 버튼 클릭 시 실행되는 이벤트 리스너 등록
+// 번역 버튼 클릭 시 실행되는 이벤트 리스너 연결
 function bindButtonEvents(messageId) {
 
 $(document).off('click', `.translate-button[data-message-id="${messageId}"]`)
@@ -143,27 +149,30 @@ $(document).off('click', `.toggle-original-button[data-message-id="${messageId}"
 .on('click', `.toggle-original-button[data-message-id="${messageId}"]`, () => toggleOriginalOrSwipeTranslation(messageId));
 }
 
-// 페이지 새로고침이나 캐릭터 변경 시 발생하는 이벤트 감지 및 처리
+// 이벤트 리스너 등록 방식 최적화: SillyTavern 내부에서 발생하는 이벤트 감지
 function addEventListeners() {
 
-$(document).off(event_types.CHARACTER_MESSAGE_RENDERED).on(event_types.CHARACTER_MESSAGE_RENDERED, addButtonsToMessages);
+eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, addButtonsToMessages); // 캐릭터 메시지가 렌더링될 때 감지
+eventSource.on(event_types.USER_MESSAGE_RENDERED, addButtonsToMessages); // 사용자 메시지가 렌더링될 때도 감지
 
 }
 
+// 페이지 초기화 및 이벤트 리스너 등록하기
 jQuery(async () => {
 
 console.log("LLM Translator script initialized!");
 
 try {
-await new Promise(resolve => setTimeout(resolve, 900));
+await new Promise(resolve => setTimeout(resolve, 900)); // 약간의 지연 시간 추가
 
 const htmlContent = await $.get(`${extensionFolderPath}/example.html`);
-$("#extensions_settings").append(htmlContent);
+$("#extensions_settings").append(htmlContent); // 설정 패널에 HTML 추가
 
-addButtonsToMessages();
-addEventListeners();
+addButtonsToMessages(); // 첫 번째 메시지 그룹에 번역 버튼 추가
 
-} catch(err) {
+addEventListeners(); // 모든 메시지 렌더링 후 이벤트 리스너 연결
+
+} catch (err) {
 console.error("Error occurred during LLM Translator initialization:", err);
 }
 });
