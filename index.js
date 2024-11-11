@@ -57,8 +57,9 @@ console.error("Failed to write translation data:", err.message);
 async function requestTranslationFromAPI(text) {
 
 let apiEndpoint;
-const selectedCompany = $('#model_select').val() || extension_settings?.[extensionName]?.model || "openai"; // 기본적으로 OpenAI
-const selectedSubModel = $('#submodel_select').val() || extension_settings?.[extensionName]?.submodel || "gpt-3.5-turbo"; // 기본적으로 GPT3.5
+
+const selectedCompany = extension_settings?.[extensionName]?.model || "openai"; // 기본적으로 OpenAI
+const selectedSubModel = extension_settings?.[extensionName]?.submodel || "gpt-4"; // 기본적으로 GPT4
 
 if (!selectedCompany || !selectedSubModel) {
 alert("Please select a company and submodel before translating.");
@@ -85,14 +86,11 @@ console.log(`Sending translation request to ${selectedCompany}, model: ${selecte
 try {
 const response = await fetch(apiEndpoint ,{
 method: 'POST',
-headers: {
-'Authorization': `Bearer ${yourApiKey}`, // 여기에 OpenAI API 키를 추가해야 함
-'Content-Type': 'application/json'
-},
+headers: getRequestHeaders(), // 이 부분에서 API 키를 포함한 헤더를 전달함
 body: JSON.stringify({
 model: selectedSubModel,
 prompt: text,
-max_tokens: 100, // 필요에 따라 설정 가능
+max_tokens: 100, // 필요에 따라 설정
 })
 });
 
@@ -117,9 +115,7 @@ return;
 }
 
 // 각 메시지마다 번역 버튼 추가 (메시지 상단에 사용자 이름 옆에 배치)
-messages.forEach((message, messageId) => {
-
-// 사용자 이름 옆 컨테이너에 추가
+messages.forEach((message, messageId) => {// 사용자 이름 옆 컨테이너에 추가
 if ($(`#chat .mes[mesid="${messageId}"]`).find('.translate-button').length === 0) {
 const buttonHtml = `
 <div class="message-buttons">
@@ -135,8 +131,15 @@ bindButtonEvents(messageId); // 이벤트 바인딩 수행
 });
 }
 
+// 초기 로딩 시 기존 메세지에도 버튼이 뜨도록 하기 위한 함수
+function initButtonsForPreviousMessages() {
+addButtonsToMessages(); // 모든 기존 메시지를 대상으로 번역 및 원문 보기 버튼 추가
+}
+
 // 번역 버튼 및 원문 보기 버튼 클릭 시 실행되는 이벤트 리스너 등록
-function bindButtonEvents(messageId) {$(document).off('click', `.translate-button[data-message-id="${messageId}"]`)
+function bindButtonEvents(messageId) {
+
+$(document).off('click', `.translate-button[data-message-id="${messageId}"]`)
 .on('click', `.translate-button[data-message-id="${messageId}"]`, async () => {
 const messageText = $(`#chat .mes[mesid="${messageId}"] .mes_text`).text();
 const translatedText = await requestTranslationFromAPI(messageText);
@@ -157,14 +160,7 @@ function addEventListeners() {
 eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, addButtonsToMessages); // 캐릭터 메시지가 렌더링될 때 감지
 eventSource.on(event_types.USER_MESSAGE_RENDERED, addButtonsToMessages); // 사용자 메시지가 렌더링될 때 감지
 
-$(document).off('click', '.translate-button').on('click', '.translate-button', async function () {
-const messageText = $(this).closest('.mes_text').text();
-const translatedText = await requestTranslationFromAPI(messageText);
-
-if (translatedText !== null) {
-$(this).closest('.mes_text').text(translatedText); // 번역 텍스트 표시
-}
-});
+initButtonsForPreviousMessages(); // 페이지 로드 시 기존 메세지도 대상으로 처리
 }
 
 // Drawer 설정 값 유지하기 위한 로컬 스토리지 관리 로직 추가
@@ -174,7 +170,7 @@ const savedModel = localStorage.getItem(`${extensionName}_model`);
 const savedSubmodel = localStorage.getItem(`${extensionName}_submodel`);
 
 if (savedPrompt) $('#translation_prompt').val(savedPrompt);
-if (savedModel) $('#model_select').val(savedModel).trigger('change');
+if (savedModel) $('#model_select').val(savedModel).trigger('change'); // 모델 변경 시 트리거 작동시키기 위함
 if (savedSubmodel) $('#submodel_select').val(savedSubmodel);
 }
 
@@ -195,15 +191,14 @@ jQuery(async () => {
 console.log("LLM Translator script initialized!");
 
 try {
-await new Promise(resolve => setTimeout(resolve, 900)); // 약간의 지연 시간 추가
+await new Promise(resolve => setTimeout(resolve, 900));
 
 const htmlContent = await $.get(`${extensionFolderPath}/example.html`);
 $("#extensions_settings").append(htmlContent);
 
 loadSettingsFromLocalStorage(); // Drawer 설정값 로드
 
-addButtonsToMessages();
-addEventListeners();
+addEventListeners(); // 모든 이벤트 리스너 등록 및 기존 메세지도 처리
 
 $('#save_settings_button').click(saveSettingsToLocalStorage);
 
