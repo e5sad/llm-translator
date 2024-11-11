@@ -51,7 +51,9 @@ localStorage.setItem(filePath, JSON.stringify(existingTranslations));
 } catch (err) {
 console.error("Failed to write translation data:", err.message);
 }
-}// Translate API 호출 함수 수정: 실제 회사 제공 엔드포인트 사용
+}
+
+// Translate API 호출 함수 수정: 실제 회사 제공 엔드포인트 사용
 async function requestTranslationFromAPI(text) {
 
 let apiEndpoint;
@@ -110,9 +112,7 @@ const messages = context.chat || [];
 if (!messages.length) {
 console.log("No messages found.");
 return;
-}
-
-// 각 메시지마다 번역 버튼 추가 (메시지 상단에 사용자 이름 옆에 배치)
+}// 각 메시지마다 번역 버튼 추가 (메시지 상단에 사용자 이름 옆에 배치)
 messages.forEach((message, messageId) => {
 
 // 사용자 이름 옆 컨테이너에 추가
@@ -126,20 +126,38 @@ const buttonHtml = `
 
 $(`#chat .mes[mesid="${messageId}"] .ch_name`).append(buttonHtml);
 
-bindButtonEvents(messageId); // 이벤트 바인딩
+bindButtonEvents(messageId); // 이벤트 바인딩 수행
 }
 });
 }
 
-// 이벤트 리스너 등록 방식 최적화: SillyTavern 내부에서 발생하는 이벤트 감지
+// 번역 버튼 및 원문 보기 버튼 클릭 시 실행되는 이벤트 리스너 등록
+function bindButtonEvents(messageId) {
+
+$(document).off('click', `.translate-button[data-message-id="${messageId}"]`)
+.on('click', `.translate-button[data-message-id="${messageId}"]`, async () => {
+const messageText = $(`#chat .mes[mesid="${messageId}"] .mes_text`).text();
+const translatedText = await requestTranslationFromAPI(messageText);
+
+if (translatedText !== null) {
+saveSwipeTranslationToFile(getContext().room_id, messageId, 0, translatedText);
+$(`#chat .mes[mesid="${messageId}"] .mes_text`).text(translatedText); // 화면에 표시
+}
+});
+
+$(document).off('click', `.toggle-original-button[data-message-id="${messageId}"]`)
+.on('click', `.toggle-original-button[data-message-id="${messageId}"]`, () => toggleOriginalOrSwipeTranslation(messageId));
+}
+
+// 이벤트 리스너 등록 방식 최적화: SillyTavern 내부에서 발생하는 이벤트 감지 및 연결
 function addEventListeners() {
 
 eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, addButtonsToMessages); // 캐릭터 메시지가 렌더링될 때 감지
-eventSource.on(event_types.USER_MESSAGE_RENDERED, addButtonsToMessages); // 사용자 메시지가 렌더링될 때도 감지
+eventSource.on(event_types.USER_MESSAGE_RENDERED, addButtonsToMessages); // 사용자 메시지가 렌더링될 때 감지
 
 }
 
-// Drawer 설정 값 유지하기 위한 로컬 스토리지 관리
+// Drawer 설정 값 유지하기 위한 로컬 스토리지 관리 로직 추가
 function loadSettingsFromLocalStorage() {
 const savedPrompt = localStorage.getItem(`${extensionName}_prompt`);
 const savedModel = localStorage.getItem(`${extensionName}_model`);
@@ -150,7 +168,7 @@ if (savedModel) $('#model_select').val(savedModel).trigger('change'); // 모델 
 if (savedSubmodel) $('#submodel_select').val(savedSubmodel);
 }
 
-// 새로운 설정 값 적용 시 로컬 스토리지에 저장하기
+// 새로운 설정 값 적용 시 로컬 스토리지에 저장하기 위한 함수 추가
 function saveSettingsToLocalStorage() {
 const prompt = $('#translation_prompt').val();
 const model = $('#model_select').val();
@@ -167,17 +185,17 @@ jQuery(async () => {
 console.log("LLM Translator script initialized!");
 
 try {
-await new Promise(resolve => setTimeout(resolve, 900)); // 약간의 지연 시간 추가
+await new Promise(resolve => setTimeout(resolve, 900));
 
 const htmlContent = await $.get(`${extensionFolderPath}/example.html`);
 $("#extensions_settings").append(htmlContent);
 
-loadSettingsFromLocalStorage(); // 새로고침 후에도 설정 값을 불러오기
+loadSettingsFromLocalStorage();
 
 addButtonsToMessages();
 addEventListeners();
 
-$('#save_settings_button').click(saveSettingsToLocalStorage); // Save and Apply settings 자동 적용
+$('#save_settings_button').click(saveSettingsToLocalStorage);
 
 } catch (err) {
 console.error("Error occurred during LLM Translator initialization:", err);
