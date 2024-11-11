@@ -1,89 +1,121 @@
 <div class="llm-translator-settings">
-    <div class="inline-drawer">
-        <div class="inline-drawer-toggle inline-drawer-header">
-            <b>LLM Translator Settings</b>
-            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
-        </div>
-
-        <div class="inline-drawer-content">
-            <!-- Translation Prompt Input -->
-            <div class="llm-translator_block flex-container">
-                <label for="translation_prompt">Translation Prompt:</label>
-                <textarea id="translation_prompt" rows="4" placeholder="Enter translation prompt"></textarea>
-            </div>
-
-            <!-- LLM Provider Selection -->
-            <div class="llm-translator_block flex-container">
-                <label for="model_select">Select Provider:</label>
-                <select id="model_select">
-                    <option value="" disabled selected>Select your provider</option>
-                    <option value="openai">OpenAI</option>
-                    <option value="claude">Claude</option>
-                    <option value="cohere">Cohere</option>
-                    <option value="google">Google (Gemini)</option>
-                </select>
-            </div>
-
-            <!-- Submodel Selection (hardcoded into HTML) -->
-            <div class="llm-translator_block flex-container">
-                <label for="submodel_select">Select Submodel:</label>
-                <select id="submodel_select" disabled>
-                    <!-- Options will be enabled and displayed dynamically based on provider -->
-                    <optgroup label="OpenAI">
-                        <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
-                        <option value="gpt-4">gpt-4</option>
-                        <option value="gpt-4-turbo">gpt-4-turbo</option>
-                        <!-- Add additional models as needed -->
-                    </optgroup>
-                    <optgroup label="Claude">
-                        <option value="claude-v2">claude-v2</option>
-                        <option value="claude-v2.1">claude-v2.1</option>
-                        <!-- Add additional models as needed -->
-                    </optgroup>
-                    <!-- More providers and models can be added here -->
-                </select>
-            </div>
-
-            <!-- Save and Apply Settings Button -->
-            <div class="llm-translator_block flex-container">
-                <button id="save_settings_button" class="menu_button">Save and Apply Settings</button>
-            </div>
-
-        </div>
-    </div>
+<!-- 상단 타이틀 -->
+<div class="inline-drawer">
+<div class="inline-drawer-toggle inline-drawer-header">
+<b>LLM Translator Settings</b>
+<div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
 </div>
 
-<!-- Script to handle settings and dynamic submodel population -->
+<div class="inline-drawer-content">
+<!-- Translation prompt input -->
+<div class="llm-translator_block flex-container">
+<label for="translation_prompt">Translation Prompt:</label>
+<textarea id="translation_prompt" rows="4" placeholder="Enter your translation prompt here"></textarea>
+</div>
+
+<!-- LLM company selection -->
+<div class="llm-translator_block flex-container">
+<label for="model_select">Select Company:</label>
+<select id="model_select">
+<option value="" disabled selected>Select a company</option>
+<option value="openai">OpenAI</option>
+<option value="claude">Claude</option>
+<option value="cohere">Cohere</option>
+<option value="google">Google (Gemini)</option>
+</select>
+</div>
+
+<!-- Submodel selection -->
+<div class="llm-translator_block flex-container">
+<label for="submodel_select">Select Submodel:</label>
+<select id="submodel_select" disabled>
+<option value="" disabled selected>Select a company first</option>
+<!-- Submodels will be populated dynamically based on the company selected -->
+</select>
+</div>
+
+<!-- Save and apply settings button -->
+<div class="llm-translator_block flex-container">
+<button id="save_settings_button" class="menu_button">Save and Apply Settings</button>
+</div>
+
+</div>
+</div>
+</div>
+
+<!-- Scripting logic for updating submodels and saving settings -->
 <script type="text/javascript">
-    $(document).ready(function() {
-        // Handle provider change event and enable submodel selection
-        $('#model_select').change(function() {
-            const selectedProvider = $(this).val();
-            $('#submodel_select').prop('disabled', false);
-        });
+$(document).ready(function() {
+// Update submodel options when a company is selected
+$('#model_select').change(function() {
+const selectedCompany = $(this).val();
 
-        // Save settings button
-        $('#save_settings_button').click(function() {
-            saveSettings(); // Call the function defined in index.js
-        });
-    });
+updateSubModelOptions(selectedCompany); // Defined in index.js
+});
 
-    // Save settings function linked to index.js logic
-    function saveSettings() {
-        const prompt = $('#translation_prompt').val();
-        const provider = $('#model_select').val();
-        const subModel = $('#submodel_select').val();
+// Save settings when clicking the save button
+$('#save_settings_button').click(function() {
+saveSettings(); // Defined function to save the settings
+});
 
-        if (!provider || !subModel) {
-            alert('Please select a provider and submodel.');
-            return;
-        }
+});
 
-        // Save to extension settings (connected with index.js)
-        extension_settings.llm_translator.prompt = prompt;
-        extension_settings.llm_translator.model = provider;
-        extension_settings.llm_translator.submodel = subModel;
+function updateSubModelOptions(company) {
+$('#submodel_select').prop('disabled', false); // Enable the submodel select dropdown
 
-        saveSettingsDebounced(); // SillyTavern's save function
-    }
+// Update submodels based on the selected company.
+switch(company) {
+case 'openai':
+$('#submodel_select').html(`
+<option value="gpt-3.5-turbo-0125">gpt-3.5-turbo-0125</option>
+<option value="gpt-3.5-turbo-1106">gpt-3.5-turbo-1106</option>
+<!-- Other OpenAI models ... -->
+`);
+break;
+
+case 'claude':
+$('#submodel_select').html(`
+<option value="claude-instant-v1">claude-instant-v1</option>
+<option value="claude-v2.1">claude-v2.1</option>
+<!-- Other Claude models ... -->
+`);
+break;
+
+case 'cohere':
+$('#submodel_select').html(`
+<option value="command-light-nightly">command-light-nightly</option>
+<!-- Other Cohere models ... -->
+`);
+break;
+
+case 'google':
+$('#submodel_select').html(`
+<option value="gemini-pro-latest">Gemini Pro [latest]</option>
+<!-- Other Google models ... -->
+`);
+break;
+
+default:
+$('#submodel_select').html(`
+<option value="" disabled>No models available for this company.</option>
+`);
+}
+}function saveSettings() {
+const prompt = $('#translation_prompt').val();
+const company = $('#model_select').val();
+const subModel = $('#submodel_select').val();
+
+if (!company || !subModel) {
+alert("Please select a company and submodel.");
+return;
+}
+
+console.log("Saving settings...");
+
+extension_settings.llm_translator.prompt = prompt;
+extension_settings.llm_translator.model = company;
+extension_settings.llm_translator.submodel = subModel;
+
+saveSettingsDebounced(); // Function from SillyTavern to save the settings.
+}
 </script>
