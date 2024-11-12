@@ -1,27 +1,92 @@
-<div id="llm-translator-settings">
-    <h3>LLM Translator Settings</h3>
-    <div class="padding10">
-        <label>번역 프롬프트:</label>
-        <input type="text" id="translation_prompt" class="text_pole wide" />
-        
-        <label>AI 모델:</label>
-        <select id="model_select">
-            <option value="openai">OpenAI</option>
-            <option value="claude">Claude</option>
-            <option value="google">Google AI</option>
-            <option value="cohere">Cohere</option>
-        </select>
-        
-        <label>서브 모델:</label>
-        <select id="submodel_select">
-            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-            <option value="gpt-4">GPT-4</option>
-            <option value="claude-2">Claude 2</option>
-            <option value="command">Cohere Command</option>
-            <option value="command-light">Cohere Command Light</option>
-        </select>
+<div class="llm-translator-settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>LLM Translator Settings</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
 
-        <label>API 키:</label>
-        <input type="password" id="api_key" class="text_pole wide" placeholder="선택한 AI 서비스의 API 키를 입력하세요" />
+        <div class="inline-drawer-content">
+            <!-- Translation prompt input -->
+            <div class="llm-translator_block flex-container">
+                <label for="translation_prompt">Translation Prompt:</label>
+                <textarea id="translation_prompt" rows="4" placeholder="Enter your translation prompt here"></textarea>
+            </div>
+
+            <!-- LLM company selection -->
+            <div class="llm-translator_block flex-container">
+                <label for="model_select">Select Company:</label>
+                <select id="model_select">
+                    <option value="" disabled selected>Select a company</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="claude">Claude</option>
+                    <option value="cohere">Cohere</option>
+                    <option value="google">Google (Gemini)</option>
+                </select>
+            </div>
+
+            <!-- Submodel selection -->
+            <div class="llm-translator_block flex-container">
+                <label for="submodel_select">Select Submodel:</label>
+                <select id="submodel_select" disabled>
+                    <!-- Submodels will be populated dynamically based on the company selected -->
+                    <option value="" disabled selected>Select a company first</option>
+                </select>
+            </div>
+
+        </div>
     </div>
 </div>
+
+<!-- Scripting logic for updating submodels and saving settings -->
+<script type="text/javascript">
+    $(document).ready(function() {
+        // Update submodel options when a company is selected
+        $('#model_select').change(function() {
+            const selectedCompany = $(this).val();
+
+            updateSubModelOptions(selectedCompany); // Defined in index.js
+        });
+
+    });
+
+    function updateSubModelOptions(company) {
+      $('#submodel_select').prop('disabled', false); // Enable the submodel select dropdown
+
+      // Update submodels based on the selected company.
+      switch(company) {
+          case 'openai':
+              $('#submodel_select').html(`
+                  <option value="gpt-3.5-turbo-0125">gpt-3.5-turbo-0125</option>
+                  <!-- Other OpenAI models ... -->
+              `);
+              break;
+
+          case 'claude':
+              $('#submodel_select').html(`
+                  <option value="claude-instant-v1">claude-instant-v1</option>
+                  <!-- Other Claude models ... -->
+              `);
+              break;
+
+          case 'cohere':
+              $('#submodel_select').html(`
+                  <option value="command-light-nightly">command-light-nightly</option>
+                  <!-- Other Cohere models ... -->
+              `);
+              break;
+
+          case 'google':
+              $('#submodel_select').html(`
+                  <option value="gemini-pro-latest">Gemini Pro [latest]</option>
+                  <!-- Other Google models ... -->
+              `);
+              break;
+
+          default:
+              $('#submodel_select').html(`
+                  <option value="" disabled>No models available for this company.</option>
+              `);
+      }
+    }
+
+</script>
