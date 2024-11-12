@@ -1,273 +1,104 @@
-import {
-    extension_settings,
-    getContext,
-} from "../../../extensions.js";
-import { updateMessageBlock, saveSettingsDebounced, getRequestHeaders } from "../../../../script.js";
-import { eventSource, event_types } from "../../../../script.js";
-
-const extensionName = "llm-translator";
-const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
-const translationStorageKey = 'llm_translations'; // Using localStorage for translations
-
-// Settings management functions
-function loadSettingsFromLocalStorage() {
-    extension_settings[extensionName] = extension_settings[extensionName] || {};
-    const settings = extension_settings[extensionName];
-
-    $('#translation_prompt').val(settings.prompt || 'Translate the following English text to Korean:');
-    $('#model_select').val(settings.model || 'openai');
-    $('#submodel_select').val(settings.submodel || 'gpt-3.5-turbo');
-}
-
-function saveSettingsToLocalStorage() {
-    extension_settings[extensionName] = extension_settings[extensionName] || {};
-    const settings = extension_settings[extensionName];
-
-    settings.prompt = $('#translation_prompt').val();
-    settings.model = $('#model_select').val();
-    settings.submodel = $('#submodel_select').val();
-
-    saveSettingsDebounced();
-}
-
-// Load saved translations from localStorage
-function loadTranslations() {
-    return JSON.parse(localStorage.getItem(translationStorageKey)) || {};
-}
-
-// Save updated translations to localStorage
-function saveTranslations(translations) {
-    localStorage.setItem(translationStorageKey, JSON.stringify(translations));
-}
-
-// Initialize the extension and add buttons to existing and new messages
-function initializeExtension() {
-    console.log("Initializing LLM Translator...");
-
-    // Ensure that this function runs after all DOM elements are ready
-    $(document).ready(() => {
-
-        // Add buttons to all existing messages immediately
-        setTimeout(() => {
-            const messages = $('#chat .mes');
-            messages.each(function () {
-                const messageId = $(this).attr('mesid');
-                if (messageId && !$(this).find('.translate-icons').length) {
-                    addButtonsToMessage($(this), messageId);
-                }
-            });
-        }, 1000); // Ensure enough delay for UI rendering
-
-        // Listen for future messages and dynamically add buttons
-        addEventListeners();
-    });
-}
-
-// Add 'Translate' and 'Toggle Original/Translation' buttons to each message
-function addButtonsToMessage(messageElement, messageId) {
-    const buttonHtml = `
-        <div class="translate-icons" style="display: inline-block; margin-left: 5px;">
-            <div class="translate-button fa-solid fa-globe"
-                 data-message-id="${messageId}"
-                 style="cursor: pointer; margin-right: 5px;"
-                 title="Translate">
-            </div>
-            <div class="toggle-original-button fa-solid fa-eye"
-                 data-message-id="${messageId}"
-                 style="cursor: pointer; display: none;"
-                 title="Show Original">
-            </div>
-        </div>
-    `;
-
-    messageElement.find('.mes_block .mes_text').before(buttonHtml);
-    bindButtonEvents(messageId);
-}
-
-// Bind events to the translate and toggle buttons
-function bindButtonEvents(messageId) {
-
-   // Translate button click event
-   $(document).off('click', `.translate-button[data-message-id="${messageId}"]`)
-       .on('click', `.translate-button[data-message-id="${messageId}"]`, async function() {
-
-           const $button = $(this);
-           if ($button.hasClass('fa-spin')) {
-               console.warn("Translation already running, stopping.");
-               return;
-           }
-
-           const messageElement = $(`#chat .mes[mesid="${messageId}"]`);
-           const messageText = messageElement.find('.mes_text').text().trim();
-
-           // Store original text and show loading state
-           messageElement.attr('data-original-text', messageText);
-           $button.addClass('fa-spin');
-
-           // Check for existing translation first
-           let translations = loadTranslations();
-           let translatedText = translations[messageId];
-
-           if (!translatedText) {
-               translatedText = await requestTranslationFromAPI(messageText);
-               if (translatedText) {
-                   translations[messageId] = translatedText;
-                   saveTranslations(translations); // Save translation result to localStorage
-               }
-           }
-
-           if (translatedText) {
-               messageElement.find('.mes_text').text(translatedText);
-               messageElement.find('.toggle-original-button').show();
-               $button.hide();
-           }
-
-           $button.removeClass('fa-spin');
-       });
-
-   // Toggle back and forth between original and translated text
-   $(document).off('click', `.toggle-original-button[data-message-id="${messageId}"]`)
-       .on('click', `.toggle-original-button[data-message-id="${messageId}"]`, function() {
-
-           const messageElement = $(`#chat .mes[mesid="${messageId}"]`);
-           const originalText = messageElement.attr('data-original-text');
-           const currentText = messageElement.find('.mes_text').text();
-
-           if (currentText !== originalText) { // Switch to original text
-               messageElement.find('.mes_text').text(originalText);
-               $(this).attr('title', 'Show Translation');
-               messageElement.find('.translate-button').show();
-               $(this).hide();
-           } else { // Switch back to translated text
-               let translations = loadTranslations();
-               const translatedText = translations[messageId];
-
-               if (translatedText) {
-                   messageElement.find('.mes_text').text(translatedText);
-                   $(this).attr('title', 'Show Original');
-                   messageElement.find('.translate-button').hide();
-                   $(this).show();
-               }
-           }
-       });
-}
-
-// Function to handle API requests for translation
 async function requestTranslationFromAPI(text) {
-    if (!text || text.trim() === '') {
-        console.warn("Empty text provided for translation");
-        return null;
-    }
+    if (!text?.trim()) return null;
 
     const settings = extension_settings[extensionName] || {};
-    const selectedCompany = settings.model || "openai";
-    const selectedSubModel = settings.submodel || "gpt-3.5-turbo";
-    const translationPrompt = settings.prompt || "Translate the following English text to Korean:";
+    const selectedModel = settings.model || 'openai';
+    const selectedSubModel = settings.submodel || 'gpt-3.5-turbo';
+    const prompt = settings.prompt || '다음 영어 텍스트를 한글로 번역하시오:';
 
-    let apiEndpoint;
-    let requestBody;
+    let apiEndpoint, headers, body;
 
-    switch(selectedCompany) {
+    switch(selectedModel) {
         case 'openai':
-            apiEndpoint = '/api/openai/chat/completions';
-            requestBody = {
+            apiEndpoint = 'https://api.openai.com/v1/chat/completions';
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${settings.openai_key}`, // OpenAI API 키 필요
+            };
+            body = {
                 model: selectedSubModel,
                 messages: [
-                    { role: "system", content: translationPrompt },
+                    { role: "system", content: prompt },
                     { role: "user", content: text }
                 ]
             };
             break;
+
         case 'claude':
-            apiEndpoint = '/api/claude/chat';
-            requestBody = {
+            apiEndpoint = 'https://api.anthropic.com/v1/messages';
+            headers = {
+                'Content-Type': 'application/json',
+                'x-api-key': settings.claude_key, // Claude API 키 필요
+                'anthropic-version': '2023-06-01'
+            };
+            body = {
                 model: selectedSubModel,
-                messages: [{ role: "user", content: `${translationPrompt}\n\n${text}` }]
+                messages: [
+                    { role: "user", content: `${prompt}\n\n${text}` }
+                ]
             };
             break;
+
+        case 'google':
+            apiEndpoint = 'https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText';
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${settings.google_key}` // Google AI API 키 필요
+            };
+            body = {
+                prompt: {
+                    text: `${prompt}\n\n${text}`
+                }
+            };
+            break;
+
+        case 'cohere':
+            apiEndpoint = 'https://api.cohere.ai/v1/generate';
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${settings.cohere_key}` // Cohere API 키 필요
+            };
+            body = {
+                model: selectedSubModel,
+                prompt: `${prompt}\n\n${text}`,
+                max_tokens: 1000
+            };
+            break;
+
         default:
-            throw new Error('Unsupported model selected');
+            throw new Error('지원하지 않는 AI 모델입니다.');
     }
 
     try {
         const response = await fetch(apiEndpoint, {
             method: 'POST',
-            headers: getRequestHeaders(),
-            body: JSON.stringify(requestBody)
+            headers,
+            body: JSON.stringify(body)
         });
 
         if (!response.ok) {
-            const errorMessage = await response.text();
-
-            console.error(`API Error (${response.status}): ${errorMessage}`);
-
-            alert(`Translation failed with status ${response.status}.`);
-
-            throw new Error(`API Error (${response.status}): ${errorMessage}`);
+            throw new Error(`API Error (${response.status}): ${await response.text()}`);
         }
 
-        // Safely parse response and check its format
-        const contentType = response.headers.get('content-type');
+        const data = await response.json();
+        
+        // 각 AI 서비스별 응답 형식에 맞게 처리
+        switch(selectedModel) {
+            case 'openai':
+                return data.choices[0].message.content;
+            case 'claude':
+                return data.content[0].text;
+            case 'google':
+                return data.candidates[0].output;
+            case 'cohere':
+                return data.generations[0].text;
+            default:
+                throw new Error('응답 처리 중 오류가 발생했습니다.');
+        }
 
-        if (!contentType.includes('application/json')) {
-           throw new Error('Unexpected response type from server. Expected application/json.');
-       }
-
-       const data = await response.json();
-       const translatedText = data.choices?.[0]?.message?.content || data.choices?.[0]?.text;
-
-       if (!translatedText) {
-           throw new Error('No translation received from API');
-       }
-
-       return translatedText;
-
-   } catch (error) {
-
-       console.error("Translation error:", error.message);
-       alert(`Translation failed: ${error.message}`);
-
-       return null;
-   }
+    } catch (error) {
+        console.error("Translation error:", error);
+        alert(`번역 오류: ${error.message}`);
+        throw error;
+    }
 }
-
-// Event listeners for newly sent or received messages
-function addEventListeners() {
-   eventSource.on(event_types.MESSAGE_SENT, function() { setTimeout(() => addButtonsToMessages(), 100); });
-   eventSource.on(event_types.MESSAGE_RECEIVED, function() { setTimeout(() => addButtonsToMessages(), 100); });
-}
-
-function addButtonsToMessages() {
-   const messages = $('#chat .mes');
-   messages.each(function () {
-       const messageId = $(this).attr('mesid');
-       if (messageId && !$(this).find('.translate-icons').length) {
-           addButtonsToMessage($(this), messageId);
-       }
-   });
-}
-
-// Initialize on page load and append UI elements for settings management
-jQuery(async () => {
-
-   console.log("LLM Translator script initializing...");
-
-   try {
-
-       await new Promise(resolve => setTimeout(resolve, 900));
-
-       const htmlContent = await $.get(`${extensionFolderPath}/example.html`);
-       $("#extensions_settings").append(htmlContent);
-
-       loadSettingsFromLocalStorage(); // Load initial configuration
-
-       initializeExtension(); // Set up buttons and behavior
-
-       $('#translation_prompt, #model_select, #submodel_select').on('change', saveSettingsToLocalStorage);
-
-   } catch (err) {
-
-       console.error("Error during LLM Translator initialization:", err);
-
-   }
-});
