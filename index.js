@@ -4,11 +4,12 @@ import {
 } from "../../../extensions.js";
 import { updateMessageBlock, saveSettingsDebounced, getRequestHeaders } from "../../../../script.js";
 import { eventSource, event_types } from "../../../../script.js";
-const fs = require('fs'); // Node.js 파일 시스템 모듈
+
+// const fs = require('fs'); // Node.js fs module removed due to browser limitations
 
 const extensionName = "llm-translator";
 const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
-const translationFolderPath = './data/translations';
+const translationStorageKey = 'llm_translations'; // Using localStorage for translations
 
 // Settings management functions
 function loadSettingsFromLocalStorage() {
@@ -29,6 +30,16 @@ function saveSettingsToLocalStorage() {
     settings.submodel = $('#submodel_select').val();
 
     saveSettingsDebounced();
+}
+
+// Load saved translations from localStorage
+function loadTranslations() {
+    return JSON.parse(localStorage.getItem(translationStorageKey)) || {};
+}
+
+// Save updated translations to localStorage
+function saveTranslations(translations) {
+    localStorage.setItem(translationStorageKey, JSON.stringify(translations));
 }
 
 // Initialize the extension and add buttons to messages
@@ -152,12 +163,14 @@ function bindButtonEvents(messageId) {
            $button.addClass('fa-spin');
 
            // Check for existing translation first
-           let translatedText = loadTranslationFromFile(messageId);
+           let translations = loadTranslations();
+           let translatedText = translations[messageId];
 
            if (!translatedText) {
                translatedText = await requestTranslationFromAPI(messageText);
                if (translatedText) {
-                   saveTranslationToFile(messageId, translatedText); // Save translation result
+                   translations[messageId] = translatedText;
+                   saveTranslations(translations); // Save translation result to localStorage
                }
            }
 
@@ -184,7 +197,9 @@ function bindButtonEvents(messageId) {
                messageElement.find('.translate-button').show();
                $(this).hide();
            } else { // Switch back to translated text
-               const translatedText = loadTranslationFromFile(messageId);
+               let translations = loadTranslations();
+               const translatedText = translations[messageId];
+
                if (translatedText) {
                    messageElement.find('.mes_text').text(translatedText);
                    $(this).attr('title', 'Show Original');
@@ -193,47 +208,6 @@ function bindButtonEvents(messageId) {
                }
            }
        });
-}
-
-// Function to save translations to file (append mode)
-function saveTranslationToFile(messageId, text) {
-    const filePath = `${translationFolderPath}/translations.txt`;
-
-    fs.appendFile(filePath, `Message ID ${messageId}: ${text}\n`, function (err) {
-        if (err) throw err;
-        console.log(`Message ID ${messageId} translation saved!`);
-    });
-}
-
-// Function to load translations from file by Message ID
-function loadTranslationFromFile(messageId) {
-    const filePath = `${translationFolderPath}/translations.txt`;
-
-    try {
-        const data = fs.readFileSync(filePath, 'utf8');
-        const regex = new RegExp(`Message ID ${messageId}: (.+)`); // Find corresponding message ID
-        const match = data.match(regex);
-
-        return match ? match[1] : null;
-    } catch (err) {
-        console.error(err);
-        return null;
-    }
-}
-
-// Remove a specific translation from file when deleting a message or swipe
-function removeTranslationFromFile(messageId) {
-     const filePath = `${translationFolderPath}/translations.txt`;
-
-     try {
-         let data = fs.readFileSync(filePath, 'utf8');
-         // Replace targeted line with an empty string
-         data = data.replace(new RegExp(`Message ID ${messageId}: .+\n`), '');
-         fs.writeFileSync(filePath, data);
-         console.log(`Removed Message ID ${messageId} from translations.`);
-     } catch (err) {
-         console.error(err);
-     }
 }
 
 // Event listeners for newly sent or received messages
