@@ -11,7 +11,28 @@ const extensionName = "llm-translator";
 const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
 const translationFolderPath = './data/translations';
 
-// Modified initialization function to ensure buttons are added on page load
+// Settings management functions
+function loadSettingsFromLocalStorage() {
+    extension_settings[extensionName] = extension_settings[extensionName] || {};
+    const settings = extension_settings[extensionName];
+    
+    $('#translation_prompt').val(settings.prompt || 'Translate the following English text to Korean:');
+    $('#model_select').val(settings.model || 'openai');
+    $('#submodel_select').val(settings.submodel || 'gpt-3.5-turbo-0125');
+}
+
+function saveSettingsToLocalStorage() {
+    extension_settings[extensionName] = extension_settings[extensionName] || {};
+    const settings = extension_settings[extensionName];
+    
+    settings.prompt = $('#translation_prompt').val();
+    settings.model = $('#model_select').val();
+    settings.submodel = $('#submodel_select').val();
+    
+    saveSettingsDebounced();
+}
+
+// Modified initialization function
 function initializeExtension() {
     console.log("Initializing LLM Translator...");
     
@@ -20,43 +41,52 @@ function initializeExtension() {
         const messages = $('#chat .mes');
         messages.each(function() {
             const messageId = $(this).attr('mesid');
-            if (messageId && !$(this).find('.translate-button').length) {
+            if (messageId && !$(this).find('.translate-icons').length) {
                 addButtonsToMessage($(this), messageId);
             }
         });
-    }, 1000); // Allow time for chat to load
+    }, 1000);
 }
 
-// Separate function to add buttons to a single message
+// Modified function to add buttons with icons
 function addButtonsToMessage(messageElement, messageId) {
     const buttonHtml = `
-        <div class="message-buttons">
-            <button class="translate-button" data-message-id="${messageId}">Translate</button>
-            <button class="toggle-original-button" data-message-id="${messageId}" style="display:none">Show Original</button>
+        <div class="translate-icons" style="display: inline-block; margin-left: 5px;">
+            <div class="translate-button fa-solid fa-language" 
+                 data-message-id="${messageId}" 
+                 style="cursor: pointer; margin-right: 5px;"
+                 title="Translate">
+            </div>
+            <div class="toggle-original-button fa-solid fa-rotate" 
+                 data-message-id="${messageId}" 
+                 style="cursor: pointer; display: none;"
+                 title="Show Original">
+            </div>
         </div>
     `;
     
-    messageElement.find('.mes_block').prepend(buttonHtml);
+    // Add icons next to the message timestamp
+    messageElement.find('.mes_block .mes_text').before(buttonHtml);
     bindButtonEvents(messageId);
 }
 
-// Modified translation request function
 async function requestTranslationFromAPI(text) {
     if (!text || text.trim() === '') {
         console.warn("Empty text provided for translation");
         return null;
     }
 
-    const selectedCompany = extension_settings?.[extensionName]?.model || "openai";
-    const selectedSubModel = extension_settings?.[extensionName]?.submodel || "gpt-3.5-turbo-0125";
-    const translationPrompt = $('#translation_prompt').val() || "Translate the following English text to Korean:";
+    const settings = extension_settings[extensionName] || {};
+    const selectedCompany = settings.model || "openai";
+    const selectedSubModel = settings.submodel || "gpt-3.5-turbo-0125";
+    const translationPrompt = settings.prompt || "Translate the following English text to Korean:";
 
     let apiEndpoint;
     let requestBody;
 
     switch(selectedCompany) {
         case 'openai':
-            apiEndpoint = 'https://api.openai.com/v1/chat/completions';
+            apiEndpoint = '/api/openai/chat/completions';  // Use SillyTavern's proxy
             requestBody = {
                 model: selectedSubModel,
                 messages: [
@@ -72,7 +102,7 @@ async function requestTranslationFromAPI(text) {
             };
             break;
         case 'claude':
-            apiEndpoint = 'https://api.anthropic.com/v1/messages';
+            apiEndpoint = '/api/claude/chat';  // Use SillyTavern's proxy
             requestBody = {
                 model: selectedSubModel,
                 messages: [{
@@ -81,7 +111,6 @@ async function requestTranslationFromAPI(text) {
                 }]
             };
             break;
-        // Add other cases as needed
         default:
             throw new Error('Unsupported model selected');
     }
@@ -113,59 +142,65 @@ async function requestTranslationFromAPI(text) {
     }
 }
 
-// Modified button event binding
+// Modified button event binding with icon support
 function bindButtonEvents(messageId) {
     $(document).off('click', `.translate-button[data-message-id="${messageId}"]`)
         .on('click', `.translate-button[data-message-id="${messageId}"]`, async function() {
             const messageElement = $(`#chat .mes[mesid="${messageId}"]`);
             const messageText = messageElement.find('.mes_text').text().trim();
             
+            // Store original text
+            messageElement.attr('data-original-text', messageText);
+            
             // Show loading state
-            $(this).prop('disabled', true).text('Translating...');
+            $(this).addClass('fa-spin');
             
             const translatedText = await requestTranslationFromAPI(messageText);
             
             if (translatedText) {
-                // Save translation
-                saveSwipeTranslationToFile(getContext().room_id, messageId, 0, translatedText);
-                
-                // Update display
                 messageElement.find('.mes_text').text(translatedText);
                 messageElement.find('.toggle-original-button').show();
                 $(this).hide();
             }
             
-            // Reset button state
-            $(this).prop('disabled', false).text('Translate');
+            // Reset loading state
+            $(this).removeClass('fa-spin');
         });
 
     $(document).off('click', `.toggle-original-button[data-message-id="${messageId}"]`)
         .on('click', `.toggle-original-button[data-message-id="${messageId}"]`, function() {
             const messageElement = $(`#chat .mes[mesid="${messageId}"]`);
-            const isShowingTranslation = $(this).text() === 'Show Original';
+            const originalText = messageElement.attr('data-original-text');
+            const currentText = messageElement.find('.mes_text').text();
             
-            if (isShowingTranslation) {
+            if (currentText !== originalText) {
                 // Show original
-                const originalText = loadOriginalText(messageId);
                 messageElement.find('.mes_text').text(originalText);
-                $(this).text('Show Translation');
+                $(this).attr('title', 'Show Translation');
                 messageElement.find('.translate-button').show();
-            } else {
-                // Show translation
-                const translatedText = loadSwipeTranslationFromFile(getContext().room_id, messageId, 0);
-                if (translatedText) {
-                    messageElement.find('.mes_text').text(translatedText);
-                    $(this).text('Show Original');
-                    messageElement.find('.translate-button').hide();
-                }
+                $(this).hide();
             }
         });
 }
 
 // Add event listeners for new messages
 function addEventListeners() {
-    eventSource.on(event_types.MESSAGE_SENT, addButtonsToMessages);
-    eventSource.on(event_types.MESSAGE_RECEIVED, addButtonsToMessages);
+    eventSource.on(event_types.MESSAGE_SENT, function() {
+        setTimeout(() => addButtonsToMessages(), 100);
+    });
+    eventSource.on(event_types.MESSAGE_RECEIVED, function() {
+        setTimeout(() => addButtonsToMessages(), 100);
+    });
+}
+
+function addButtonsToMessages() {
+    const messages = $('#chat .mes');
+    messages.each(function() {
+        const messageId = $(this).attr('mesid');
+        if (messageId && !$(this).find('.translate-icons').length) {
+            addButtonsToMessage($(this), messageId);
+        }
+    });
 }
 
 // Initialize extension when document is ready
@@ -181,6 +216,9 @@ jQuery(async () => {
         loadSettingsFromLocalStorage();
         initializeExtension();
         addEventListeners();
+        
+        // Add settings save handler
+        $('#translation_prompt, #model_select, #submodel_select').on('change', saveSettingsToLocalStorage);
         
     } catch (err) {
         console.error("Error during LLM Translator initialization:", err);
