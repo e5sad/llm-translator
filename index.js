@@ -4,66 +4,50 @@ import {
 } from "../../../extensions.js";
 import { updateMessageBlock, saveSettingsDebounced, getRequestHeaders } from "../../../../script.js";
 import { eventSource, event_types } from "../../../../script.js";
+import { saveAs } from 'file-saver';
 
 const extensionName = "llm-translator";
-const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
-const translationStorageKey = 'llm_translations'; // Using localStorage for translations
+const translationFilePath = 'translations.txt';
 
-// Settings management functions
-function loadSettingsFromLocalStorage() {
-    extension_settings[extensionName] = extension_settings[extensionName] || {};
-    const settings = extension_settings[extensionName];
-
-    $('#translation_prompt').val(settings.prompt || 'Translate the following English text to Korean:');
-    $('#model_select').val(settings.model || 'openai');
-    $('#submodel_select').val(settings.submodel || 'gpt-3.5-turbo');
+// Translation storage management
+async function saveTranslationToFile(messageId, translatedText) {
+    try {
+        const translations = await loadTranslationsFromFile();
+        translations[messageId] = translatedText;
+        
+        // Convert to string format for text file
+        const translationText = Object.entries(translations)
+            .map(([id, text]) => `${id}|||${text}`)
+            .join('\n');
+            
+        const blob = new Blob([translationText], {type: 'text/plain;charset=utf-8'});
+        saveAs(blob, translationFilePath);
+    } catch (error) {
+        console.error('Failed to save translation:', error);
+    }
 }
 
-function saveSettingsToLocalStorage() {
-    extension_settings[extensionName] = extension_settings[extensionName] || {};
-    const settings = extension_settings[extensionName];
-
-    settings.prompt = $('#translation_prompt').val();
-    settings.model = $('#model_select').val();
-    settings.submodel = $('#submodel_select').val();
-
-    saveSettingsDebounced();
+async function loadTranslationsFromFile() {
+    try {
+        const response = await fetch(translationFilePath);
+        const text = await response.text();
+        const translations = {};
+        
+        text.split('\n').forEach(line => {
+            if (line) {
+                const [id, translation] = line.split('|||');
+                translations[id] = translation;
+            }
+        });
+        
+        return translations;
+    } catch (error) {
+        console.error('Failed to load translations:', error);
+        return {};
+    }
 }
 
-// Load saved translations from localStorage
-function loadTranslations() {
-    return JSON.parse(localStorage.getItem(translationStorageKey)) || {};
-}
-
-// Save updated translations to localStorage
-function saveTranslations(translations) {
-    localStorage.setItem(translationStorageKey, JSON.stringify(translations));
-}
-
-// Initialize the extension and add buttons to existing and new messages
-function initializeExtension() {
-    console.log("Initializing LLM Translator...");
-
-    // Ensure that this function runs after all DOM elements are ready
-    $(document).ready(() => {
-
-        // Add buttons to all existing messages immediately
-        setTimeout(() => {
-            const messages = $('#chat .mes');
-            messages.each(function () {
-                const messageId = $(this).attr('mesid');
-                if (messageId && !$(this).find('.translate-icons').length) {
-                    addButtonsToMessage($(this), messageId);
-                }
-            });
-        }, 1000); // Ensure enough delay for UI rendering
-
-        // Listen for future messages and dynamically add buttons
-        addEventListeners();
-    });
-}
-
-// Add 'Translate' and 'Toggle Original/Translation' buttons to each message
+// Add translation buttons to messages
 function addButtonsToMessage(messageElement, messageId) {
     const buttonHtml = `
         <div class="translate-icons" style="display: inline-block; margin-left: 5px;">
@@ -84,75 +68,93 @@ function addButtonsToMessage(messageElement, messageId) {
     bindButtonEvents(messageId);
 }
 
-// Bind events to the translate and toggle buttons
+let activeTranslations = new Set();
+
 function bindButtonEvents(messageId) {
+    $(document).off('click', `.translate-button[data-message-id="${messageId}"]`)
+        .on('click', `.translate-button[data-message-id="${messageId}"]`, async function() {
+            const $button = $(this);
+            
+            // If translation is in progress
+            if ($button.hasClass('fa-spin')) {
+                activeTranslations.delete(messageId);
+                $button.removeClass('fa-spin');
+                return;
+            }
 
-   // Translate button click event
-   $(document).off('click', `.translate-button[data-message-id="${messageId}"]`)
-       .on('click', `.translate-button[data-message-id="${messageId}"]`, async function() {
+            const messageElement = $(`#chat .mes[mesid="${messageId}"]`);
+            const messageText = messageElement.find('.mes_text').text().trim();
 
-           const $button = $(this);
-           if ($button.hasClass('fa-spin')) {
-               console.warn("Translation already running, stopping.");
-               return;
-           }
+            // Store original text
+            messageElement.attr('data-original-text', messageText);
+            
+            // Check for existing translation first
+            const translations = await loadTranslationsFromFile();
+            let translatedText = translations[messageId];
 
-           const messageElement = $(`#chat .mes[mesid="${messageId}"]`);
-           const messageText = messageElement.find('.mes_text').text().trim();
+            // If requesting new translation
+            if ($button.hasClass('translation-active')) {
+                translatedText = null;
+            }
 
-           // Store original text and show loading state
-           messageElement.attr('data-original-text', messageText);
-           $button.addClass('fa-spin');
+            if (!translatedText) {
+                activeTranslations.add(messageId);
+                $button.addClass('fa-spin');
 
-           // Check for existing translation first
-           let translations = loadTranslations();
-           let translatedText = translations[messageId];
+                try {
+                    translatedText = await requestTranslationFromAPI(messageText);
+                    
+                    // Only proceed if translation wasn't cancelled
+                    if (activeTranslations.has(messageId)) {
+                        if (translatedText) {
+                            await saveTranslationToFile(messageId, translatedText);
+                            messageElement.find('.mes_text').text(translatedText);
+                            messageElement.find('.toggle-original-button').show();
+                            $button.hide().removeClass('fa-spin');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Translation error:', error);
+                } finally {
+                    activeTranslations.delete(messageId);
+                    $button.removeClass('fa-spin');
+                }
+            } else {
+                messageElement.find('.mes_text').text(translatedText);
+                messageElement.find('.toggle-original-button').show();
+                $button.hide();
+            }
 
-           if (!translatedText) {
-               translatedText = await requestTranslationFromAPI(messageText);
-               if (translatedText) {
-                   translations[messageId] = translatedText;
-                   saveTranslations(translations); // Save translation result to localStorage
-               }
-           }
+            $button.toggleClass('translation-active');
+        });
 
-           if (translatedText) {
-               messageElement.find('.mes_text').text(translatedText);
-               messageElement.find('.toggle-original-button').show();
-               $button.hide();
-           }
+    $(document).off('click', `.toggle-original-button[data-message-id="${messageId}"]`)
+        .on('click', `.toggle-original-button[data-message-id="${messageId}"]`, async function() {
+            const messageElement = $(`#chat .mes[mesid="${messageId}"]`);
+            const originalText = messageElement.attr('data-original-text');
+            const currentText = messageElement.find('.mes_text').text();
 
-           $button.removeClass('fa-spin');
-       });
-
-   // Toggle back and forth between original and translated text
-   $(document).off('click', `.toggle-original-button[data-message-id="${messageId}"]`)
-       .on('click', `.toggle-original-button[data-message-id="${messageId}"]`, function() {
-
-           const messageElement = $(`#chat .mes[mesid="${messageId}"]`);
-           const originalText = messageElement.attr('data-original-text');
-           const currentText = messageElement.find('.mes_text').text();
-
-           if (currentText !== originalText) { // Switch to original text
-               messageElement.find('.mes_text').text(originalText);
-               $(this).attr('title', 'Show Translation');
-               messageElement.find('.translate-button').show();
-               $(this).hide();
-           } else { // Switch back to translated text
-               let translations = loadTranslations();
-               const translatedText = translations[messageId];
-
-               if (translatedText) {
-                   messageElement.find('.mes_text').text(translatedText);
-                   $(this).attr('title', 'Show Original');
-                   messageElement.find('.translate-button').hide();
-                   $(this).show();
-               }
-           }
-       });
+            if (currentText !== originalText) {
+                // Show original text
+                messageElement.find('.mes_text').text(originalText);
+                $(this).attr('title', 'Show Translation');
+                messageElement.find('.translate-button').show();
+                $(this).hide();
+            } else {
+                // Show translation from file
+                const translations = await loadTranslationsFromFile();
+                const translatedText = translations[messageId];
+                
+                if (translatedText) {
+                    messageElement.find('.mes_text').text(translatedText);
+                    $(this).attr('title', 'Show Original');
+                    messageElement.find('.translate-button').hide();
+                    $(this).show();
+                }
+            }
+        });
 }
 
-// Function to handle API requests for translation
 async function requestTranslationFromAPI(text) {
     if (!text || text.trim() === '') {
         console.warn("Empty text provided for translation");
@@ -160,114 +162,59 @@ async function requestTranslationFromAPI(text) {
     }
 
     const settings = extension_settings[extensionName] || {};
-    const selectedCompany = settings.model || "openai";
+    const selectedModel = settings.model || "openai";
     const selectedSubModel = settings.submodel || "gpt-3.5-turbo";
     const translationPrompt = settings.prompt || "Translate the following English text to Korean:";
 
-    let apiEndpoint;
-    let requestBody;
-
-    switch(selectedCompany) {
-        case 'openai':
-            apiEndpoint = '/api/openai/chat/completions';
-            requestBody = {
+    try {
+        const response = await fetch('/api/openai/chat/completions', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({
                 model: selectedSubModel,
                 messages: [
                     { role: "system", content: translationPrompt },
                     { role: "user", content: text }
                 ]
-            };
-            break;
-        case 'claude':
-            apiEndpoint = '/api/claude/chat';
-            requestBody = {
-                model: selectedSubModel,
-                messages: [{ role: "user", content: `${translationPrompt}\n\n${text}` }]
-            };
-            break;
-        default:
-            throw new Error('Unsupported model selected');
-    }
-
-    try {
-        const response = await fetch(apiEndpoint, {
-            method: 'POST',
-            headers: getRequestHeaders(),
-            body: JSON.stringify(requestBody)
+            })
         });
 
         if (!response.ok) {
-            const errorMessage = await response.text();
-
-            console.error(`API Error (${response.status}): ${errorMessage}`);
-
-            alert(`Translation failed with status ${response.status}.`);
-
-            throw new Error(`API Error (${response.status}): ${errorMessage}`);
+            throw new Error(`API Error (${response.status})`);
         }
 
-        // Safely parse response and check its format
-        const contentType = response.headers.get('content-type');
+        const data = await response.json();
+        return data.choices?.[0]?.message?.content;
 
-        if (!contentType.includes('application/json')) {
-           throw new Error('Unexpected response type from server. Expected application/json.');
-       }
-
-       const data = await response.json();
-       const translatedText = data.choices?.[0]?.message?.content || data.choices?.[0]?.text;
-
-       if (!translatedText) {
-           throw new Error('No translation received from API');
-       }
-
-       return translatedText;
-
-   } catch (error) {
-
-       console.error("Translation error:", error.message);
-       alert(`Translation failed: ${error.message}`);
-
-       return null;
-   }
+    } catch (error) {
+        console.error("Translation error:", error);
+        return null;
+    }
 }
 
-// Event listeners for newly sent or received messages
-function addEventListeners() {
-   eventSource.on(event_types.MESSAGE_SENT, function() { setTimeout(() => addButtonsToMessages(), 100); });
-   eventSource.on(event_types.MESSAGE_RECEIVED, function() { setTimeout(() => addButtonsToMessages(), 100); });
-}
-
-function addButtonsToMessages() {
-   const messages = $('#chat .mes');
-   messages.each(function () {
-       const messageId = $(this).attr('mesid');
-       if (messageId && !$(this).find('.translate-icons').length) {
-           addButtonsToMessage($(this), messageId);
-       }
-   });
-}
-
-// Initialize on page load and append UI elements for settings management
+// Initialize extension
 jQuery(async () => {
+    console.log("LLM Translator initializing...");
+    
+    // Add translation buttons to existing messages
+    const messages = $('#chat .mes');
+    messages.each(function() {
+        const messageId = $(this).attr('mesid');
+        if (messageId && !$(this).find('.translate-icons').length) {
+            addButtonsToMessage($(this), messageId);
+        }
+    });
 
-   console.log("LLM Translator script initializing...");
-
-   try {
-
-       await new Promise(resolve => setTimeout(resolve, 900));
-
-       const htmlContent = await $.get(`${extensionFolderPath}/example.html`);
-       $("#extensions_settings").append(htmlContent);
-
-       loadSettingsFromLocalStorage(); // Load initial configuration
-
-       initializeExtension(); // Set up buttons and behavior
-
-       $('#translation_prompt, #model_select, #submodel_select').on('change', saveSettingsToLocalStorage);
-
-   } catch (err) {
-
-       console.error("Error during LLM Translator initialization:", err);
-
-   }
+    // Listen for new messages
+    eventSource.on(event_types.MESSAGE_SENT, () => {
+        setTimeout(() => {
+            const messages = $('#chat .mes');
+            messages.each(function() {
+                const messageId = $(this).attr('mesid');
+                if (messageId && !$(this).find('.translate-icons').length) {
+                    addButtonsToMessage($(this), messageId);
+                }
+            });
+        }, 100);
+    });
 });
